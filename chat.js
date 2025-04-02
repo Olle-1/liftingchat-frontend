@@ -18,7 +18,6 @@ messageInput.addEventListener('keypress', function(e) {
 });
 
 // Generate a unique session ID or retrieve from localStorage
-// Add near the top of chat.js
 const sessionId = localStorage.getItem('chatSessionId') || Math.random().toString(36).substring(2, 15);
 localStorage.setItem('chatSessionId', sessionId);
 
