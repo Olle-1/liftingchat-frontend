@@ -1,5 +1,5 @@
 // Base API URL - change this to your deployed API URL
-const API_URL = '/api';
+const API_URL = 'https://liftingchat.com';
 
 // DOM elements
 const messagesContainer = document.getElementById('messages');
@@ -28,7 +28,6 @@ body: JSON.stringify({
     session_id: sessionId
 })
 
-// Function to send a message
 async function sendMessage() {
     const message = messageInput.value.trim();
     
@@ -48,18 +47,16 @@ async function sendMessage() {
     
     try {
         // Send message to API
-        // Send message to API
         const response = await fetch(`${API_URL}/chat`, {
-            method: 'POST',  // Make sure method is correct
+            method: 'POST',
             headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            query: message,
-            // Add session_id if needed
-            session_id: sessionId || null
-        })
-});
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                query: message,
+                session_id: sessionId
+            })
+        });
         
         // Remove loading indicator
         messagesContainer.removeChild(loadingDiv);
