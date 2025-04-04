@@ -1,7 +1,23 @@
 [[redirects]]
-  from = "/api/*"
-  to = "https://liftingchat.com/:splat"
+  from = "/chat"
+  to = "https://www.liftingchat.com/chat"
   status = 200
   force = true
-  headers = {Access-Control-Allow-Origin = "*"}
   methods = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+  headers = {Access-Control-Allow-Origin = "*"}
+
+[[redirects]]
+  from = "/chat/stream"
+  to = "https://www.liftingchat.com/chat/stream"
+  status = 200
+  force = true
+  methods = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+  headers = {Access-Control-Allow-Origin = "*"}
+
+[[redirects]]
+  from = "/auth/*"
+  to = "https://www.liftingchat.com/auth/:splat"
+  status = 200
+  force = true
+  methods = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+  headers = {Access-Control-Allow-Origin = "*"}
