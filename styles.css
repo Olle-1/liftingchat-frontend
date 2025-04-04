@@ -237,3 +237,37 @@ footer {
         grid-template-columns: 3fr 1fr;
     }
 }
+/* Loading animation */
+@keyframes pulse {
+    0% { opacity: 0.4; }
+    50% { opacity: 1; }
+    100% { opacity: 0.4; }
+  }
+  
+  .dots {
+    animation: pulse 1.5s infinite;
+    display: inline-block;
+  }
+  
+  /* Enhanced loading message */
+  #loading-text {
+    display: flex;
+    align-items: center;
+  }
+  
+  /* Custom loading icon - optional */
+  .loading-icon {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    margin-right: 10px;
+    border: 2px solid var(--primary);
+    border-radius: 50%;
+    border-top-color: transparent;
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }

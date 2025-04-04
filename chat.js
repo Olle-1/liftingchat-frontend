@@ -33,14 +33,29 @@ async function sendMessage() {
     // Clear input field
     messageInput.value = '';
     
-    // Add loading indicator
+    // Add loading indicator with dots animation
     const loadingDiv = document.createElement('div');
     loadingDiv.className = 'message bot-message';
-    loadingDiv.innerHTML = '<p>Thinking...</p>';
+    loadingDiv.innerHTML = '<p id="loading-text">Thinking<span class="dots">...</span></p>';
     messagesContainer.appendChild(loadingDiv);
     
+    // Start loading animation
+    const loadingText = document.getElementById('loading-text');
+    const loadingInterval = setInterval(() => {
+        const dots = loadingText.querySelector('.dots');
+        if (dots.textContent.length >= 3) {
+            dots.textContent = '.';
+        } else {
+            dots.textContent += '.';
+        }
+    }, 500);
+    
     try {
-        // Send message to API with updated path
+        // Create AbortController for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 120000); // 2-minute timeout
+        
+        // Send message to API with updated path and timeout
         const response = await fetch(`${API_URL}/chat`, {
             method: 'POST',
             headers: {
@@ -49,14 +64,23 @@ async function sendMessage() {
             body: JSON.stringify({
                 query: message,
                 session_id: sessionId
-            })
+            }),
+            signal: controller.signal
         });
+        
+        // Clear timeout since we got a response
+        clearTimeout(timeoutId);
+        
+        // Stop loading animation
+        clearInterval(loadingInterval);
         
         // Remove loading indicator
         messagesContainer.removeChild(loadingDiv);
         
         if (!response.ok) {
-            throw new Error(`Error: ${response.status} ${response.statusText}`);
+            const errorData = await response.json().catch(() => ({}));
+            const errorMessage = errorData.detail || `Error: ${response.status} ${response.statusText}`;
+            throw new Error(errorMessage);
         }
         
         const data = await response.json();
@@ -70,13 +94,27 @@ async function sendMessage() {
         }
         
     } catch (error) {
+        // Stop loading animation
+        clearInterval(loadingInterval);
+        
         // Remove loading indicator if still present
         if (messagesContainer.contains(loadingDiv)) {
             messagesContainer.removeChild(loadingDiv);
         }
         
+        // Check for specific error types
+        let errorMessage = "Sorry, there was an error. Please try again.";
+        
+        if (error.name === 'AbortError') {
+            errorMessage = "The request took too long to complete. Please try asking a simpler question.";
+        } else if (error.message.includes('504')) {
+            errorMessage = "The server took too long to respond. This might happen with complex questions. Please try a simpler question.";
+        } else if (error.message) {
+            errorMessage = `Error: ${error.message}`;
+        }
+        
         // Show error message
-        addMessage(`Sorry, there was an error: ${error.message}. Please try again.`, 'bot');
+        addMessage(errorMessage, 'bot');
         console.error('Error:', error);
     }
 }
