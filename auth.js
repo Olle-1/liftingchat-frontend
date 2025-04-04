@@ -1,5 +1,5 @@
-// Base API URL - change this to your deployed API URL
-const API_URL = 'https://liftingchat.com';
+// Base API URL - now with /api prefix
+const API_URL = '/api';
 
 // Login form handling
 const loginForm = document.getElementById('login-form');

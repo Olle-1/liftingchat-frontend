@@ -1,5 +1,5 @@
-// Base API URL - Fix to use relative URL that Netlify will proxy
-const API_URL = '';  // Empty string means same origin
+// Base API URL - Now using /api prefix
+const API_URL = '/api';
 
 // Generate a unique session ID or retrieve from localStorage
 const sessionId = localStorage.getItem('chatSessionId') || Math.random().toString(36).substring(2, 15);
@@ -40,8 +40,8 @@ async function sendMessage() {
     messagesContainer.appendChild(loadingDiv);
     
     try {
-        // Send message to API through Netlify's proxy
-        const response = await fetch('/chat', {
+        // Send message to API with updated path
+        const response = await fetch(`${API_URL}/chat`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
