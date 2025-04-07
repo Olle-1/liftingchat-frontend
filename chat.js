@@ -50,6 +50,8 @@ async function sendMessage() {
     isRequestInProgress = true;
     
     try {
+        console.log("Sending streaming request to:", `${API_URL}/chat/stream`);
+        
         // Use the streaming endpoint
         const response = await fetch(`${API_URL}/chat/stream`, {
             method: 'POST',
@@ -73,9 +75,14 @@ async function sendMessage() {
         let buffer = '';
         let fullResponse = '';
         
+        console.log("Starting to process stream...");
+        
         while (true) {
             const {done, value} = await reader.read();
-            if (done) break;
+            if (done) {
+                console.log("Stream complete");
+                break;
+            }
             
             buffer += decoder.decode(value, {stream: true});
             
@@ -87,15 +94,18 @@ async function sendMessage() {
                 if (line.startsWith('data: ')) {
                     try {
                         const data = JSON.parse(line.substring(6));
+                        console.log("Received chunk:", data.content);
                         responsePara.textContent += data.content;
                         fullResponse += data.content;
                         messagesContainer.scrollTop = messagesContainer.scrollHeight;
                     } catch (e) {
-                        console.error("Error parsing JSON:", e);
+                        console.error("Error parsing JSON:", e, "Raw line:", line);
                     }
                 }
             }
         }
+        
+        console.log("Processing complete response");
         
         // Process sources if present in the response
         const sourcesMatch = fullResponse.match(/Sources:([\s\S]+)/);
@@ -120,8 +130,8 @@ async function sendMessage() {
         }
         
     } catch (error) {
-        responsePara.textContent = `I encountered an error: ${error.message}. Please try again.`;
         console.error('Error:', error);
+        responsePara.textContent = `I encountered an error: ${error.message}. Please try again.`;
     } finally {
         isRequestInProgress = false;
     }

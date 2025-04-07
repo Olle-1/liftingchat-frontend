@@ -4,7 +4,7 @@
   to = "/chat.html"
   status = 200
 
-# Handle streaming endpoint
+# Handle streaming endpoint with longer timeouts
 [[redirects]]
   from = "/api/chat/stream"
   to = "https://www.liftingchat.com/chat/stream"
