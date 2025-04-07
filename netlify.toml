@@ -11,12 +11,7 @@
   status = 200
   force = true
   methods = ["POST"]
-  headers = {
-    Access-Control-Allow-Origin = "*",
-    Access-Control-Allow-Methods = "GET, POST, OPTIONS",
-    Access-Control-Allow-Headers = "Content-Type",
-    Cache-Control = "no-cache, no-store, must-revalidate"
-  }
+  headers = { Access-Control-Allow-Origin = "*", Access-Control-Allow-Methods = "GET, POST, OPTIONS", Access-Control-Allow-Headers = "Content-Type", Cache-Control = "no-cache, no-store, must-revalidate" }
 
 [[redirects]]
   from = "/api/chat/stream"
@@ -24,12 +19,7 @@
   status = 200
   force = true
   methods = ["POST"]
-  headers = {
-    Access-Control-Allow-Origin = "*",
-    Access-Control-Allow-Methods = "GET, POST, OPTIONS",
-    Access-Control-Allow-Headers = "Content-Type",
-    Cache-Control = "no-cache, no-store, must-revalidate"
-  }
+  headers = { Access-Control-Allow-Origin = "*", Access-Control-Allow-Methods = "GET, POST, OPTIONS", Access-Control-Allow-Headers = "Content-Type", Cache-Control = "no-cache, no-store, must-revalidate" }
 
 [[redirects]]
   from = "/api/auth/*"
@@ -37,12 +27,7 @@
   status = 200
   force = true
   methods = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
-  headers = {
-    Access-Control-Allow-Origin = "*",
-    Access-Control-Allow-Methods = "GET, POST, OPTIONS",
-    Access-Control-Allow-Headers = "Content-Type",
-    Cache-Control = "no-cache, no-store, must-revalidate"
-  }
+  headers = { Access-Control-Allow-Origin = "*", Access-Control-Allow-Methods = "GET, POST, OPTIONS", Access-Control-Allow-Headers = "Content-Type", Cache-Control = "no-cache, no-store, must-revalidate" }
 
 # Handle OPTIONS preflight requests
 [[redirects]]
@@ -50,9 +35,4 @@
   to = "https://www.liftingchat.com/:splat"
   status = 200
   methods = ["OPTIONS"]
-  headers = {
-    Access-Control-Allow-Origin = "*",
-    Access-Control-Allow-Methods = "GET, POST, OPTIONS",
-    Access-Control-Allow-Headers = "Content-Type",
-    Access-Control-Max-Age = "86400"
-  }
+  headers = { Access-Control-Allow-Origin = "*", Access-Control-Allow-Methods = "GET, POST, OPTIONS", Access-Control-Allow-Headers = "Content-Type", Access-Control-Max-Age = "86400" }
