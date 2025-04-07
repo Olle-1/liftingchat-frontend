@@ -1,9 +1,5 @@
-// Base API URL
-const API_URL = '/api';
-
-// Generate a unique session ID
-const sessionId = localStorage.getItem('chatSessionId') || Math.random().toString(36).substring(2, 15);
-localStorage.setItem('chatSessionId', sessionId);
+// Base API URL - use direct HTTPS URL
+const API_URL = 'https://www.liftingchat.com';
 
 // DOM elements
 const messagesContainer = document.getElementById('messages');
@@ -11,129 +7,193 @@ const messageInput = document.getElementById('message-input');
 const sendButton = document.getElementById('send-button');
 const sourcesContainer = document.getElementById('sources');
 
-// Track if a request is in progress
-let isRequestInProgress = false;
+// Generate a unique session ID or retrieve from localStorage
+const sessionId = localStorage.getItem('chatSessionId') || Math.random().toString(36).substring(2, 15);
+localStorage.setItem('chatSessionId', sessionId);
 
-// Add event listeners
+// Track if we have an active request to prevent multiple simultaneous requests
+let isRequestActive = false;
+
+// Add event listener to send button
 sendButton.addEventListener('click', sendMessage);
+
+// Also send message when pressing Enter
 messageInput.addEventListener('keypress', function(e) {
     if (e.key === 'Enter') {
         sendMessage();
     }
 });
 
-// Main function to send a message and get streaming response
+// Function to send a message and get a streaming response
 async function sendMessage() {
-    if (isRequestInProgress) {
-        console.log("Request already in progress");
+    // Don't allow multiple requests at once
+    if (isRequestActive) {
+        console.log('Request already in progress, please wait');
         return;
     }
-    
+
     const message = messageInput.value.trim();
-    if (!message) return;
+    
+    if (!message) return; // Don't send empty messages
     
     // Add user message to chat
     addMessage(message, 'user');
+    
+    // Clear input field
     messageInput.value = '';
     
-    // Create response container
-    const responseDiv = document.createElement('div');
-    responseDiv.className = 'message bot-message';
+    // Create a container for the bot's response
+    const botResponseDiv = document.createElement('div');
+    botResponseDiv.className = 'message bot-message';
+    
     const responsePara = document.createElement('p');
-    responseDiv.appendChild(responsePara);
-    messagesContainer.appendChild(responseDiv);
+    responsePara.textContent = 'Thinking...';
+    botResponseDiv.appendChild(responsePara);
     
-    // Show initial "thinking" state
-    responsePara.textContent = "Thinking...";
+    messagesContainer.appendChild(botResponseDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
     
-    // Set request in progress
-    isRequestInProgress = true;
+    // Mark that we have an active request
+    isRequestActive = true;
+    
+    // Track if we need to use fallback (non-streaming) approach
+    let useFallback = false;
+    let fullResponse = '';
     
     try {
-        console.log("Sending streaming request to:", `${API_URL}/chat/stream`);
+        // Set up event source for streaming
+        console.log('Connecting to streaming endpoint...');
         
-        // Use the streaming endpoint
-        const response = await fetch(`${API_URL}/chat/stream`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                query: message,
-                session_id: sessionId
-            })
-        });
+        // Create AbortController for timeout handling
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
         
-        if (!response.ok) {
-            throw new Error(`HTTP error: ${response.status}`);
-        }
-        
-        // Clear the initial "thinking" text
-        responsePara.textContent = "";
-        
-        // Process the event stream
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let fullResponse = '';
-        
-        console.log("Starting to process stream...");
-        
-        while (true) {
-            const {done, value} = await reader.read();
-            if (done) {
-                console.log("Stream complete");
-                break;
-            }
+        // First try the streaming endpoint
+        try {
+            const response = await fetch(`${API_URL}/chat/stream`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    query: message,
+                    session_id: sessionId
+                }),
+                signal: controller.signal
+            });
             
-            buffer += decoder.decode(value, {stream: true});
+            clearTimeout(timeoutId);
             
-            // Process complete events in buffer
-            const lines = buffer.split('\n\n');
-            buffer = lines.pop() || '';
-            
-            for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                    try {
-                        const data = JSON.parse(line.substring(6));
-                        console.log("Received chunk:", data.content);
-                        responsePara.textContent += data.content;
-                        fullResponse += data.content;
-                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-                    } catch (e) {
-                        console.error("Error parsing JSON:", e, "Raw line:", line);
+            if (!response.ok) {
+                console.warn(`Streaming endpoint returned error: ${response.status}`);
+                useFallback = true;
+            } else {
+                // Clear the "Thinking..." text
+                responsePara.textContent = '';
+                
+                // Get ready to process the stream
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let accumulatedChunks = '';
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    
+                    if (done) {
+                        console.log('Stream complete');
+                        break;
+                    }
+                    
+                    // Decode this chunk
+                    const chunk = decoder.decode(value, { stream: true });
+                    accumulatedChunks += chunk;
+                    
+                    // Process all complete SSE messages in the accumulated chunks
+                    const messages = accumulatedChunks.split('\n\n');
+                    accumulatedChunks = messages.pop() || ''; // Keep the last incomplete message
+                    
+                    for (const message of messages) {
+                        if (message.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(message.substring(6));
+                                if (data.content) {
+                                    fullResponse += data.content;
+                                    responsePara.textContent = fullResponse;
+                                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                                }
+                            } catch (e) {
+                                console.error('Error parsing SSE message:', e);
+                            }
+                        }
                     }
                 }
+                
+                console.log('Processing complete response');
+                
+                // Extract sources if present in the response
+                const sourceMatch = fullResponse.match(/Sources:\s*([\s\S]*)/);
+                if (sourceMatch && sourceMatch[1]) {
+                    const sourcesText = sourceMatch[1].trim();
+                    const linkPattern = /\[(.*?)\]\((.*?)\)/g;
+                    const sources = [];
+                    let match;
+                    
+                    while ((match = linkPattern.exec(sourcesText)) !== null) {
+                        sources.push({
+                            title: match[1],
+                            url: match[2]
+                        });
+                    }
+                    
+                    if (sources.length > 0) {
+                        displaySources(sources);
+                    }
+                    
+                    // Remove sources from displayed response
+                    responsePara.textContent = fullResponse.replace(/Sources:[\s\S]*$/, '').trim();
+                }
             }
+        } catch (streamError) {
+            console.warn('Streaming request failed, falling back to standard endpoint', streamError);
+            useFallback = true;
         }
         
-        console.log("Processing complete response");
-        
-        // Process sources if present in the response
-        const sourcesMatch = fullResponse.match(/Sources:([\s\S]+)/);
-        if (sourcesMatch) {
-            const sourcesText = sourcesMatch[1];
-            const sourceLinks = [];
+        // Use fallback approach if streaming failed
+        if (useFallback) {
+            responsePara.textContent = 'Fetching response...';
             
-            // Parse markdown links
-            const linkPattern = /\[([^\]]+)\]\(([^)]+)\)/g;
-            let match;
-            while ((match = linkPattern.exec(sourcesText)) !== null) {
-                sourceLinks.push({
-                    title: match[1],
-                    url: match[2]
-                });
+            const response = await fetch(`${API_URL}/chat`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    query: message,
+                    session_id: sessionId
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Error: ${response.status} ${response.statusText}`);
             }
             
-            // Display sources
-            if (sourceLinks.length > 0) {
-                displaySources(sourceLinks);
+            const data = await response.json();
+            
+            // Update bot message with response
+            responsePara.textContent = data.response;
+            
+            // Display sources if available
+            if (data.sources && data.sources.length > 0) {
+                displaySources(data.sources);
             }
         }
         
     } catch (error) {
+        responsePara.textContent = `Sorry, there was an error processing your request. Please try again. (Error: ${error.message})`;
         console.error('Error:', error);
-        responsePara.textContent = `I encountered an error: ${error.message}. Please try again.`;
     } finally {
-        isRequestInProgress = false;
+        // Mark that the request is complete
+        isRequestActive = false;
     }
 }
 
@@ -147,23 +207,34 @@ function addMessage(text, sender) {
     messageDiv.appendChild(messagePara);
     
     messagesContainer.appendChild(messageDiv);
+    
+    // Scroll to bottom of messages
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
 // Function to display sources
 function displaySources(sources) {
+    // Clear current sources
     sourcesContainer.innerHTML = '';
+    
+    if (!sources || sources.length === 0) {
+        return;
+    }
     
     sources.forEach(source => {
         const sourceDiv = document.createElement('div');
         sourceDiv.className = 'source';
         
-        const sourceLink = document.createElement('a');
-        sourceLink.href = source.url;
-        sourceLink.target = '_blank';
-        sourceLink.textContent = source.title;
+        if (source.url && source.title) {
+            const sourceLink = document.createElement('a');
+            sourceLink.href = source.url;
+            sourceLink.target = '_blank';
+            sourceLink.textContent = source.title;
+            sourceDiv.appendChild(sourceLink);
+        } else {
+            sourceDiv.textContent = source.title || "Unknown source";
+        }
         
-        sourceDiv.appendChild(sourceLink);
         sourcesContainer.appendChild(sourceDiv);
     });
 }

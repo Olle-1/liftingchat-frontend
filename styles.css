@@ -301,3 +301,85 @@ footer {
 .bot-message:not(:has(p:contains("error"))):not(:has(p:contains("Error"))) {
   border-left: 3px solid var(--primary);
 }
+
+/* Fix for message bubbles */
+.message {
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    border-radius: 8px;
+    max-width: 80%;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: pre-wrap;
+}
+
+.message p {
+    margin: 0;
+    line-height: 1.5;
+}
+
+.user-message {
+    background-color: var(--primary);
+    color: white;
+    margin-left: auto;
+}
+
+.bot-message {
+    background-color: #f1f1f1;
+}
+
+/* Add loading animation */
+@keyframes thinkingDots {
+    0%, 20% {
+        content: ".";
+    }
+    40% {
+        content: "..";
+    }
+    60%, 100% {
+        content: "...";
+    }
+}
+
+.thinking:after {
+    content: "...";
+    animation: thinkingDots 1.5s infinite;
+}
+
+/* Container fixes */
+.messages {
+    background: white;
+    border-radius: 8px;
+    padding: 1rem;
+    height: 70vh;
+    overflow-y: auto;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+}
+
+/* Improve input area */
+.input-area {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    position: relative;
+}
+
+.input-area input {
+    flex: 1;
+    padding: 0.75rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 1rem;
+}
+
+.input-area button {
+    padding: 0.75rem 1rem;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+}
