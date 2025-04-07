@@ -1,12 +1,9 @@
-// Base API URL - Now using /api prefix
+// Base API URL
 const API_URL = '/api';
 
-// Generate a unique session ID or retrieve from localStorage
+// Generate a unique session ID
 const sessionId = localStorage.getItem('chatSessionId') || Math.random().toString(36).substring(2, 15);
 localStorage.setItem('chatSessionId', sessionId);
-
-// Track request state to prevent duplicate requests
-let isRequestInProgress = false;
 
 // DOM elements
 const messagesContainer = document.getElementById('messages');
@@ -14,130 +11,118 @@ const messageInput = document.getElementById('message-input');
 const sendButton = document.getElementById('send-button');
 const sourcesContainer = document.getElementById('sources');
 
-// Add event listener to send button
-sendButton.addEventListener('click', sendMessage);
+// Track if a request is in progress
+let isRequestInProgress = false;
 
-// Also send message when pressing Enter
+// Add event listeners
+sendButton.addEventListener('click', sendMessage);
 messageInput.addEventListener('keypress', function(e) {
     if (e.key === 'Enter') {
         sendMessage();
     }
 });
 
-// Function to send a message
+// Main function to send a message and get streaming response
 async function sendMessage() {
-    // Prevent sending if a request is already in progress
     if (isRequestInProgress) {
-        console.log("Request already in progress, please wait...");
+        console.log("Request already in progress");
         return;
     }
     
     const message = messageInput.value.trim();
-    
-    if (!message) return; // Don't send empty messages
+    if (!message) return;
     
     // Add user message to chat
     addMessage(message, 'user');
-    
-    // Clear input field
     messageInput.value = '';
     
-    // Add loading indicator with dots animation
-    const loadingDiv = document.createElement('div');
-    loadingDiv.className = 'message bot-message';
-    loadingDiv.innerHTML = '<p id="loading-text">Thinking<span class="dots">...</span></p>';
-    messagesContainer.appendChild(loadingDiv);
+    // Create response container
+    const responseDiv = document.createElement('div');
+    responseDiv.className = 'message bot-message';
+    const responsePara = document.createElement('p');
+    responseDiv.appendChild(responsePara);
+    messagesContainer.appendChild(responseDiv);
     
-    // Start loading animation
-    const loadingText = document.getElementById('loading-text');
-    const loadingInterval = setInterval(() => {
-        const dots = loadingText.querySelector('.dots');
-        if (dots.textContent.length >= 3) {
-            dots.textContent = '.';
-        } else {
-            dots.textContent += '.';
-        }
-    }, 500);
+    // Show initial "thinking" state
+    responsePara.textContent = "Thinking...";
     
-    // Set request in progress flag
+    // Set request in progress
     isRequestInProgress = true;
     
     try {
-        // Create AbortController for timeout
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 120000); // 2-minute timeout
-        
-        console.log("Sending request to API:", `${API_URL}/chat`);
-        
-        // Send message to API with updated path and timeout
-        const response = await fetch(`${API_URL}/chat`, {
+        // Use the streaming endpoint
+        const response = await fetch(`${API_URL}/chat/stream`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
                 query: message,
                 session_id: sessionId
-            }),
-            signal: controller.signal,
-            // Increase cache-busting and prevent browser caching
-            cache: 'no-store'
+            })
         });
         
-        console.log("Received response with status:", response.status);
-        
-        // Clear timeout since we got a response
-        clearTimeout(timeoutId);
-        
-        // Stop loading animation
-        clearInterval(loadingInterval);
-        
-        // Remove loading indicator
-        messagesContainer.removeChild(loadingDiv);
-        
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            const errorMessage = errorData.detail || `Error: ${response.status} ${response.statusText}`;
-            throw new Error(errorMessage);
+            throw new Error(`HTTP error: ${response.status}`);
         }
         
-        const data = await response.json();
-        console.log("Processed response data");
+        // Clear the initial "thinking" text
+        responsePara.textContent = "";
         
-        // Add bot response to chat
-        addMessage(data.response, 'bot');
+        // Process the event stream
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let fullResponse = '';
         
-        // Display sources if available
-        if (data.sources && data.sources.length > 0) {
-            displaySources(data.sources);
+        while (true) {
+            const {done, value} = await reader.read();
+            if (done) break;
+            
+            buffer += decoder.decode(value, {stream: true});
+            
+            // Process complete events in buffer
+            const lines = buffer.split('\n\n');
+            buffer = lines.pop() || '';
+            
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    try {
+                        const data = JSON.parse(line.substring(6));
+                        responsePara.textContent += data.content;
+                        fullResponse += data.content;
+                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    } catch (e) {
+                        console.error("Error parsing JSON:", e);
+                    }
+                }
+            }
+        }
+        
+        // Process sources if present in the response
+        const sourcesMatch = fullResponse.match(/Sources:([\s\S]+)/);
+        if (sourcesMatch) {
+            const sourcesText = sourcesMatch[1];
+            const sourceLinks = [];
+            
+            // Parse markdown links
+            const linkPattern = /\[([^\]]+)\]\(([^)]+)\)/g;
+            let match;
+            while ((match = linkPattern.exec(sourcesText)) !== null) {
+                sourceLinks.push({
+                    title: match[1],
+                    url: match[2]
+                });
+            }
+            
+            // Display sources
+            if (sourceLinks.length > 0) {
+                displaySources(sourceLinks);
+            }
         }
         
     } catch (error) {
-        console.error("Error in fetch operation:", error);
-        
-        // Stop loading animation
-        clearInterval(loadingInterval);
-        
-        // Remove loading indicator if still present
-        if (messagesContainer.contains(loadingDiv)) {
-            messagesContainer.removeChild(loadingDiv);
-        }
-        
-        // Check for specific error types
-        let errorMessage = "Sorry, there was an error. Please try again.";
-        
-        if (error.name === 'AbortError') {
-            errorMessage = "The request took too long to complete. Please try asking a simpler question.";
-        } else if (error.message.includes('504')) {
-            errorMessage = "The server took too long to respond. This might happen with complex questions. Please try a simpler question.";
-        } else if (error.message) {
-            errorMessage = `Error: ${error.message}`;
-        }
-        
-        // Show error message
-        addMessage(errorMessage, 'bot');
+        responsePara.textContent = `I encountered an error: ${error.message}. Please try again.`;
+        console.error('Error:', error);
     } finally {
-        // Reset request in progress flag
         isRequestInProgress = false;
     }
 }
@@ -152,14 +137,11 @@ function addMessage(text, sender) {
     messageDiv.appendChild(messagePara);
     
     messagesContainer.appendChild(messageDiv);
-    
-    // Scroll to bottom of messages
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
 // Function to display sources
 function displaySources(sources) {
-    // Clear current sources
     sourcesContainer.innerHTML = '';
     
     sources.forEach(source => {
