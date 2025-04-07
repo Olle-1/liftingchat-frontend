@@ -5,6 +5,9 @@ const API_URL = '/api';
 const sessionId = localStorage.getItem('chatSessionId') || Math.random().toString(36).substring(2, 15);
 localStorage.setItem('chatSessionId', sessionId);
 
+// Track request state to prevent duplicate requests
+let isRequestInProgress = false;
+
 // DOM elements
 const messagesContainer = document.getElementById('messages');
 const messageInput = document.getElementById('message-input');
@@ -23,6 +26,12 @@ messageInput.addEventListener('keypress', function(e) {
 
 // Function to send a message
 async function sendMessage() {
+    // Prevent sending if a request is already in progress
+    if (isRequestInProgress) {
+        console.log("Request already in progress, please wait...");
+        return;
+    }
+    
     const message = messageInput.value.trim();
     
     if (!message) return; // Don't send empty messages
@@ -50,10 +59,15 @@ async function sendMessage() {
         }
     }, 500);
     
+    // Set request in progress flag
+    isRequestInProgress = true;
+    
     try {
         // Create AbortController for timeout
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 120000); // 2-minute timeout
+        
+        console.log("Sending request to API:", `${API_URL}/chat`);
         
         // Send message to API with updated path and timeout
         const response = await fetch(`${API_URL}/chat`, {
@@ -65,8 +79,12 @@ async function sendMessage() {
                 query: message,
                 session_id: sessionId
             }),
-            signal: controller.signal
+            signal: controller.signal,
+            // Increase cache-busting and prevent browser caching
+            cache: 'no-store'
         });
+        
+        console.log("Received response with status:", response.status);
         
         // Clear timeout since we got a response
         clearTimeout(timeoutId);
@@ -84,6 +102,7 @@ async function sendMessage() {
         }
         
         const data = await response.json();
+        console.log("Processed response data");
         
         // Add bot response to chat
         addMessage(data.response, 'bot');
@@ -94,6 +113,8 @@ async function sendMessage() {
         }
         
     } catch (error) {
+        console.error("Error in fetch operation:", error);
+        
         // Stop loading animation
         clearInterval(loadingInterval);
         
@@ -115,7 +136,9 @@ async function sendMessage() {
         
         // Show error message
         addMessage(errorMessage, 'bot');
-        console.error('Error:', error);
+    } finally {
+        // Reset request in progress flag
+        isRequestInProgress = false;
     }
 }
 

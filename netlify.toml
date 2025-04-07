@@ -4,14 +4,19 @@
   to = "/chat.html"
   status = 200
 
-# Then handle API requests
+# Then handle API requests with better headers
 [[redirects]]
   from = "/api/chat"
   to = "https://www.liftingchat.com/chat"
   status = 200
   force = true
   methods = ["POST"]
-  headers = {Access-Control-Allow-Origin = "*"}
+  headers = {
+    Access-Control-Allow-Origin = "*",
+    Access-Control-Allow-Methods = "GET, POST, OPTIONS",
+    Access-Control-Allow-Headers = "Content-Type",
+    Cache-Control = "no-cache, no-store, must-revalidate"
+  }
 
 [[redirects]]
   from = "/api/chat/stream"
@@ -19,7 +24,12 @@
   status = 200
   force = true
   methods = ["POST"]
-  headers = {Access-Control-Allow-Origin = "*"}
+  headers = {
+    Access-Control-Allow-Origin = "*",
+    Access-Control-Allow-Methods = "GET, POST, OPTIONS",
+    Access-Control-Allow-Headers = "Content-Type",
+    Cache-Control = "no-cache, no-store, must-revalidate"
+  }
 
 [[redirects]]
   from = "/api/auth/*"
@@ -27,4 +37,22 @@
   status = 200
   force = true
   methods = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
-  headers = {Access-Control-Allow-Origin = "*"}
+  headers = {
+    Access-Control-Allow-Origin = "*",
+    Access-Control-Allow-Methods = "GET, POST, OPTIONS",
+    Access-Control-Allow-Headers = "Content-Type",
+    Cache-Control = "no-cache, no-store, must-revalidate"
+  }
+
+# Handle OPTIONS preflight requests
+[[redirects]]
+  from = "/api/*"
+  to = "https://www.liftingchat.com/:splat"
+  status = 200
+  methods = ["OPTIONS"]
+  headers = {
+    Access-Control-Allow-Origin = "*",
+    Access-Control-Allow-Methods = "GET, POST, OPTIONS",
+    Access-Control-Allow-Headers = "Content-Type",
+    Access-Control-Max-Age = "86400"
+  }

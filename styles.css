@@ -237,7 +237,7 @@ footer {
         grid-template-columns: 3fr 1fr;
     }
 }
-/* Loading animation */
+/* Animated dots */
 @keyframes pulse {
     0% { opacity: 0.4; }
     50% { opacity: 1; }
@@ -249,25 +249,55 @@ footer {
     display: inline-block;
   }
   
-  /* Enhanced loading message */
+  /* Loading text styling */
   #loading-text {
     display: flex;
     align-items: center;
+    font-style: italic;
   }
   
-  /* Custom loading icon - optional */
-  .loading-icon {
-    display: inline-block;
-    width: 20px;
-    height: 20px;
-    margin-right: 10px;
-    border: 2px solid var(--primary);
-    border-radius: 50%;
-    border-top-color: transparent;
-    animation: spin 1s linear infinite;
+  /* Message transition effects */
+  .message {
+    transition: opacity 0.3s ease;
   }
   
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+  /* Error message styling */
+  .bot-message:has(p:contains("error")), 
+  .bot-message:has(p:contains("Error")) {
+    background-color: rgba(255, 0, 0, 0.1);
+    border-left: 3px solid #f44336;
   }
+  
+  /* Success message styling */
+  .bot-message:not(:has(p:contains("error"))):not(:has(p:contains("Error"))) {
+    border-left: 3px solid var(--primary);
+  }
+
+.dots {
+  animation: pulse 1.5s infinite;
+  display: inline-block;
+}
+
+/* Loading text styling */
+#loading-text {
+  display: flex;
+  align-items: center;
+  font-style: italic;
+}
+
+/* Message transition effects */
+.message {
+  transition: opacity 0.3s ease;
+}
+
+/* Error message styling */
+.bot-message:has(p:contains("error")), 
+.bot-message:has(p:contains("Error")) {
+  background-color: rgba(255, 0, 0, 0.1);
+  border-left: 3px solid #f44336;
+}
+
+/* Success message styling */
+.bot-message:not(:has(p:contains("error"))):not(:has(p:contains("Error"))) {
+  border-left: 3px solid var(--primary);
+}
