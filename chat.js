@@ -1,4 +1,4 @@
-// Base API URL - use direct HTTPS URL
+// Base API URL - using HTTPS with www
 const API_URL = 'https://www.liftingchat.com';
 
 // DOM elements
@@ -11,7 +11,7 @@ const sourcesContainer = document.getElementById('sources');
 const sessionId = localStorage.getItem('chatSessionId') || Math.random().toString(36).substring(2, 15);
 localStorage.setItem('chatSessionId', sessionId);
 
-// Track if we have an active request to prevent multiple simultaneous requests
+// Track if we have an active request
 let isRequestActive = false;
 
 // Add event listener to send button
@@ -24,11 +24,11 @@ messageInput.addEventListener('keypress', function(e) {
     }
 });
 
-// Function to send a message and get a streaming response
+// Function to send a message and get a response
 async function sendMessage() {
-    // Don't allow multiple requests at once
+    // Prevent multiple requests
     if (isRequestActive) {
-        console.log('Request already in progress, please wait');
+        console.log('Request already in progress');
         return;
     }
 
@@ -42,59 +42,83 @@ async function sendMessage() {
     // Clear input field
     messageInput.value = '';
     
-    // Create a container for the bot's response
-    const botResponseDiv = document.createElement('div');
-    botResponseDiv.className = 'message bot-message';
+    // Create bot message container with loading indicator
+    const botMessageDiv = document.createElement('div');
+    botMessageDiv.className = 'message bot-message';
     
-    const responsePara = document.createElement('p');
-    responsePara.textContent = 'Thinking...';
-    botResponseDiv.appendChild(responsePara);
+    const botMessageText = document.createElement('p');
+    botMessageText.innerHTML = 'Thinking<span class="thinking"></span>';
+    botMessageDiv.appendChild(botMessageText);
     
-    messagesContainer.appendChild(botResponseDiv);
+    messagesContainer.appendChild(botMessageDiv);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
     
     // Mark that we have an active request
     isRequestActive = true;
     
-    // Track if we need to use fallback (non-streaming) approach
-    let useFallback = false;
-    let fullResponse = '';
-    
+    // Try standard endpoint first (more reliable)
     try {
-        // Set up event source for streaming
-        console.log('Connecting to streaming endpoint...');
+        console.log('Using standard endpoint...');
+        const response = await fetch(`${API_URL}/chat`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                query: message,
+                session_id: sessionId
+            })
+        });
         
-        // Create AbortController for timeout handling
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-        
-        // First try the streaming endpoint
-        try {
-            const response = await fetch(`${API_URL}/chat/stream`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    query: message,
-                    session_id: sessionId
-                }),
-                signal: controller.signal
-            });
+        if (response.ok) {
+            const data = await response.json();
             
-            clearTimeout(timeoutId);
+            // Update message with response
+            botMessageText.textContent = data.response || "Sorry, I couldn't generate a response.";
             
-            if (!response.ok) {
-                console.warn(`Streaming endpoint returned error: ${response.status}`);
-                useFallback = true;
-            } else {
-                // Clear the "Thinking..." text
-                responsePara.textContent = '';
+            // Display sources if available
+            if (data.sources && data.sources.length > 0) {
+                displaySources(data.sources);
+            }
+        } else {
+            // If standard endpoint fails, try streaming
+            console.log('Standard endpoint failed, trying streaming...');
+            
+            // Update UI to show we're switching to streaming
+            botMessageText.textContent = 'Loading response...';
+            
+            let fullResponse = '';
+            let eventSource = null;
+            
+            try {
+                // Create URL with query parameters instead of using POST body
+                const url = new URL(`${API_URL}/chat/stream`);
                 
-                // Get ready to process the stream
-                const reader = response.body.getReader();
+                // Use fetch with streaming
+                const streamResponse = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        query: message,
+                        session_id: sessionId
+                    })
+                });
+                
+                if (!streamResponse.ok) {
+                    throw new Error(`HTTP error! status: ${streamResponse.status}`);
+                }
+                
+                // Process the response as a stream
+                const reader = streamResponse.body.getReader();
                 const decoder = new TextDecoder();
-                let accumulatedChunks = '';
+                
+                // Clear the loading text
+                botMessageText.textContent = '';
+                
+                // Track accumulated chunks for processing
+                let streamBuffer = '';
                 
                 while (true) {
                     const { done, value } = await reader.read();
@@ -106,34 +130,42 @@ async function sendMessage() {
                     
                     // Decode this chunk
                     const chunk = decoder.decode(value, { stream: true });
-                    accumulatedChunks += chunk;
+                    streamBuffer += chunk;
                     
-                    // Process all complete SSE messages in the accumulated chunks
-                    const messages = accumulatedChunks.split('\n\n');
-                    accumulatedChunks = messages.pop() || ''; // Keep the last incomplete message
+                    // Process all complete SSE messages (they're separated by double newlines)
+                    const messages = streamBuffer.split('\n\n');
+                    // Keep any incomplete message for next iteration
+                    streamBuffer = messages.pop() || '';
                     
                     for (const message of messages) {
+                        if (message.trim() === '' || message.startsWith('retry:')) continue;
+                        
                         if (message.startsWith('data: ')) {
                             try {
                                 const data = JSON.parse(message.substring(6));
                                 if (data.content) {
                                     fullResponse += data.content;
-                                    responsePara.textContent = fullResponse;
+                                    botMessageText.textContent = fullResponse;
                                     messagesContainer.scrollTop = messagesContainer.scrollHeight;
                                 }
                             } catch (e) {
-                                console.error('Error parsing SSE message:', e);
+                                console.error('Error parsing SSE message:', e, message);
                             }
                         }
                     }
                 }
                 
-                console.log('Processing complete response');
+                // Check if we got a response
+                if (!fullResponse) {
+                    throw new Error('No content received from streaming endpoint');
+                }
                 
                 // Extract sources if present in the response
                 const sourceMatch = fullResponse.match(/Sources:\s*([\s\S]*)/);
                 if (sourceMatch && sourceMatch[1]) {
                     const sourcesText = sourceMatch[1].trim();
+                    
+                    // Parse links from markdown format [title](url)
                     const linkPattern = /\[(.*?)\]\((.*?)\)/g;
                     const sources = [];
                     let match;
@@ -147,52 +179,22 @@ async function sendMessage() {
                     
                     if (sources.length > 0) {
                         displaySources(sources);
+                        
+                        // Remove sources section from displayed response
+                        botMessageText.textContent = fullResponse.replace(/Sources:[\s\S]*$/, '').trim();
                     }
-                    
-                    // Remove sources from displayed response
-                    responsePara.textContent = fullResponse.replace(/Sources:[\s\S]*$/, '').trim();
                 }
-            }
-        } catch (streamError) {
-            console.warn('Streaming request failed, falling back to standard endpoint', streamError);
-            useFallback = true;
-        }
-        
-        // Use fallback approach if streaming failed
-        if (useFallback) {
-            responsePara.textContent = 'Fetching response...';
-            
-            const response = await fetch(`${API_URL}/chat`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    query: message,
-                    session_id: sessionId
-                })
-            });
-            
-            if (!response.ok) {
-                throw new Error(`Error: ${response.status} ${response.statusText}`);
-            }
-            
-            const data = await response.json();
-            
-            // Update bot message with response
-            responsePara.textContent = data.response;
-            
-            // Display sources if available
-            if (data.sources && data.sources.length > 0) {
-                displaySources(data.sources);
+                
+            } catch (streamError) {
+                console.error('Error with streaming:', streamError);
+                botMessageText.textContent = 'I encountered an error processing your request. Please try again.';
             }
         }
-        
     } catch (error) {
-        responsePara.textContent = `Sorry, there was an error processing your request. Please try again. (Error: ${error.message})`;
         console.error('Error:', error);
+        botMessageText.textContent = 'I encountered an error processing your request. Please try again.';
     } finally {
-        // Mark that the request is complete
+        // Request is no longer active
         isRequestActive = false;
     }
 }

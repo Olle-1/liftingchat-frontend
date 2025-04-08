@@ -383,3 +383,59 @@ footer {
     cursor: pointer;
     font-weight: 500;
 }
+
+/* Fix for message bubbles */
+.message {
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    border-radius: 8px;
+    max-width: 80%;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: pre-wrap;
+    position: relative;
+}
+
+.message p {
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* Loading animation */
+@keyframes thinkingDots {
+    0% { content: "."; }
+    33% { content: ".."; }
+    66% { content: "..."; }
+    100% { content: ""; }
+}
+
+.thinking:after {
+    content: "";
+    animation: thinkingDots 1.5s infinite;
+}
+
+/* Improve message display */
+.message {
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    border-radius: 8px;
+    max-width: 80%;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: pre-wrap;
+    position: relative;
+}
+
+.message p {
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* Add better error message styling */
+.error-message {
+    background-color: #ffeeee;
+    border-left: 4px solid #ff6b6b;
+    padding: 10px;
+    margin: 10px 0;
+    color: #d32f2f;
+}
