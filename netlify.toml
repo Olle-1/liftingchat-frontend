@@ -1,3 +1,11 @@
+# Handle GET requests to streaming endpoint
+[[redirects]]
+  from = "/api/chat/stream"
+  to = "https://www.liftingchat.com/chat/stream"
+  status = 200
+  force = true
+  headers = {Access-Control-Allow-Origin = "*", Access-Control-Allow-Headers = "*", Access-Control-Allow-Methods = "GET, POST, OPTIONS", Cache-Control = "no-cache", Connection = "keep-alive"}
+
 # Redirect all API requests to the backend
 [[redirects]]
   from = "/api/*"

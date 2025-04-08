@@ -19,6 +19,7 @@ const sourcesContainer = document.getElementById('sources');
 // Global variables
 let currentApiUrlIndex = 0;
 let eventSource = null;
+let isSubmitting = false;
 
 // Add event listener to send button
 sendButton.addEventListener('click', sendMessage);
@@ -32,9 +33,15 @@ messageInput.addEventListener('keypress', function(e) {
 
 // Function to send a message
 async function sendMessage() {
-    const messageText = messageInput.value.trim();
+    // Prevent multiple submissions
+    if (isSubmitting) return;
     
+    const messageText = messageInput.value.trim();
     if (!messageText) return; // Don't send empty messages
+    
+    isSubmitting = true;
+    sendButton.disabled = true;
+    sendButton.classList.add('btn-disabled');
     
     // Add user message to chat
     addMessage(messageText, 'user');
@@ -45,7 +52,7 @@ async function sendMessage() {
     // Add loading indicator
     const loadingDiv = document.createElement('div');
     loadingDiv.className = 'message bot-message';
-    loadingDiv.innerHTML = '<p>Thinking...</p>';
+    loadingDiv.innerHTML = '<p><span class="thinking">Thinking</span></p>';
     messagesContainer.appendChild(loadingDiv);
     
     // First try streaming, with fallback to regular endpoint
@@ -61,14 +68,28 @@ async function sendMessage() {
                     eventSource.close();
                 }
                 
-                const success = await tryStreamingResponse(apiUrl, messageText, loadingDiv);
-                if (success) return; // If streaming worked, we're done
+                // Use proper GET params for EventSource (this is critical for streaming to work)
+                const urlWithParams = `${apiUrl}/chat/stream?query=${encodeURIComponent(messageText)}&session_id=${encodeURIComponent(sessionId)}`;
+                console.log("Trying streaming from:", urlWithParams);
+                
+                const success = await tryStreamingResponse(urlWithParams, messageText, loadingDiv);
+                if (success) {
+                    isSubmitting = false;
+                    sendButton.disabled = false;
+                    sendButton.classList.remove('btn-disabled');
+                    return; // If streaming worked, we're done
+                }
                 
                 // If streaming failed, try regular endpoint with same URL
                 useStreaming = false;
             } else {
                 const success = await tryRegularResponse(apiUrl, messageText, loadingDiv);
-                if (success) return; // If regular endpoint worked, we're done
+                if (success) {
+                    isSubmitting = false;
+                    sendButton.disabled = false;
+                    sendButton.classList.remove('btn-disabled');
+                    return; // If regular endpoint worked, we're done
+                }
                 
                 // If regular endpoint failed, try next URL with streaming
                 currentApiUrlIndex = (currentApiUrlIndex + 1) % API_URLS.length;
@@ -90,37 +111,34 @@ async function sendMessage() {
                 
                 // Show error message
                 addMessage('Sorry, I\'m having trouble connecting to the server. Please check your connection and try again.', 'bot');
+                isSubmitting = false;
+                sendButton.disabled = false;
+                sendButton.classList.remove('btn-disabled');
             }
         }
     }
 }
 
 // Function to try streaming response
-async function tryStreamingResponse(apiUrl, messageText, loadingDiv) {
+async function tryStreamingResponse(urlWithParams, messageText, loadingDiv) {
     return new Promise((resolve) => {
         try {
-            // Create URL for EventSource
-            const params = new URLSearchParams({
-                query: messageText,
-                session_id: sessionId
-            });
+            // Set up timeout for initial connection
+            const connectionTimeout = setTimeout(() => {
+                console.error("EventSource connection timed out");
+                eventSource.close();
+                resolve(false);  // Signal failure
+            }, 5000);  // 5 second timeout for connection
             
-            const streamUrl = `${apiUrl}/chat/stream?${params.toString()}`;
-            
-            console.log("Trying streaming from:", streamUrl);
-            
-            // Set up event source with a timeout
-            const abortController = new AbortController();
-            const timeoutId = setTimeout(() => abortController.abort(), 10000); // 10 second timeout
-            
-            eventSource = new EventSource(streamUrl);
+            // Create EventSource - already has full URL with params
+            eventSource = new EventSource(urlWithParams);
             let responseStarted = false;
             let fullResponse = '';
             
             // When connection opens
             eventSource.onopen = () => {
                 console.log("Stream connection opened");
-                clearTimeout(timeoutId);
+                clearTimeout(connectionTimeout);
             };
             
             // When we receive data
@@ -164,17 +182,21 @@ async function tryStreamingResponse(apiUrl, messageText, loadingDiv) {
             // For different event types
             eventSource.addEventListener('error', (event) => {
                 console.error("Stream error:", event);
+                clearTimeout(connectionTimeout);
                 eventSource.close();
                 
                 // Only resolve as failure if we never got any response
                 if (!responseStarted) {
-                    clearTimeout(timeoutId);
                     resolve(false);
+                } else {
+                    // We got some response, so consider it a success
+                    resolve(true);
                 }
             });
             
             eventSource.addEventListener('done', () => {
                 console.log("Stream completed");
+                clearTimeout(connectionTimeout);
                 eventSource.close();
                 
                 // Parse sources from the response if applicable
@@ -204,15 +226,19 @@ async function tryStreamingResponse(apiUrl, messageText, loadingDiv) {
                     }
                 }
                 
-                clearTimeout(timeoutId);
                 resolve(true);
+            });
+            
+            eventSource.addEventListener('heartbeat', () => {
+                console.log("Received heartbeat");
+                // Do nothing, just keep connection alive
             });
             
             // If connection fails entirely
             eventSource.onerror = () => {
                 console.error("Stream connection failed");
+                clearTimeout(connectionTimeout);
                 eventSource.close();
-                clearTimeout(timeoutId);
                 
                 // Only mark as failure if we never got any data
                 resolve(responseStarted);
@@ -232,7 +258,7 @@ async function tryRegularResponse(apiUrl, messageText, loadingDiv) {
         
         // Use AbortController for timeout
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 45000); // 45 second timeout
         
         // Send message to API
         const response = await fetch(`${apiUrl}/chat`, {
@@ -256,6 +282,16 @@ async function tryRegularResponse(apiUrl, messageText, loadingDiv) {
         
         if (!response.ok) {
             console.error("API returned error:", response.status, response.statusText);
+            
+            // Display error message to user based on status code
+            let errorMsg = "Sorry, there was a problem processing your request.";
+            if (response.status === 504) {
+                errorMsg = "The request timed out. Your question might be too complex - try asking something simpler.";
+            } else if (response.status === 429) {
+                errorMsg = "Too many requests. Please wait a moment and try again.";
+            }
+            
+            addMessage(errorMsg, 'bot');
             return false;
         }
         
@@ -272,6 +308,20 @@ async function tryRegularResponse(apiUrl, messageText, loadingDiv) {
         return true;
     } catch (error) {
         console.error("Error with regular API call:", error);
+        
+        // If the loadingDiv is still there, replace it with an error message
+        if (messagesContainer.contains(loadingDiv)) {
+            messagesContainer.removeChild(loadingDiv);
+            
+            // Add appropriate error message based on error type
+            let errorMessage = "Sorry, there was a problem connecting to the server.";
+            if (error.name === "AbortError") {
+                errorMessage = "The request took too long to complete. Please try asking a simpler question.";
+            }
+            
+            addMessage(errorMessage, 'bot');
+        }
+        
         return false;
     }
 }
@@ -296,6 +346,14 @@ function displaySources(sources) {
     // Clear current sources
     sourcesContainer.innerHTML = '';
     
+    if (sources.length === 0) {
+        const emptyDiv = document.createElement('div');
+        emptyDiv.className = 'source';
+        emptyDiv.textContent = 'No sources available';
+        sourcesContainer.appendChild(emptyDiv);
+        return;
+    }
+    
     sources.forEach(source => {
         const sourceDiv = document.createElement('div');
         sourceDiv.className = 'source';
@@ -303,7 +361,7 @@ function displaySources(sources) {
         const sourceLink = document.createElement('a');
         sourceLink.href = source.url;
         sourceLink.target = '_blank';
-        sourceLink.textContent = source.title;
+        sourceLink.textContent = source.title || 'Unknown Source';
         
         sourceDiv.appendChild(sourceLink);
         sourcesContainer.appendChild(sourceDiv);
