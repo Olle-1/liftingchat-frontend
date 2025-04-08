@@ -439,3 +439,67 @@ footer {
     margin: 10px 0;
     color: #d32f2f;
 }
+
+/* Add these styles to your existing styles.css file */
+
+/* Message formatting improvements */
+.message {
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    border-radius: 8px;
+    max-width: 80%;
+    word-wrap: break-word;  /* Ensure long text wraps properly */
+    overflow-wrap: break-word;
+}
+
+.message p {
+    margin: 0;
+    white-space: pre-wrap; /* Preserve whitespace and wrap */
+}
+
+.user-message {
+    background-color: var(--primary);
+    color: white;
+    margin-left: auto;
+}
+
+.bot-message {
+    background-color: #f1f1f1;
+}
+
+/* Loading animation */
+@keyframes pulse {
+    0% { opacity: 0.5; }
+    50% { opacity: 1; }
+    100% { opacity: 0.5; }
+}
+
+.loading-indicator {
+    display: inline-block;
+    animation: pulse 1.5s infinite ease-in-out;
+}
+
+/* Source link styling */
+.source {
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #eee;
+}
+
+.source a {
+    color: var(--primary);
+    display: block;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.source a:hover {
+    text-decoration: underline;
+}
+
+/* Disable button when sending */
+.btn-disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}

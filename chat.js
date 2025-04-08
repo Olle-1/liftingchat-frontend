@@ -1,5 +1,14 @@
-// Base API URL - using HTTPS with www
-const API_URL = 'https://www.liftingchat.com';
+// Base API URL
+// Generate a unique session ID or retrieve from localStorage
+const sessionId = localStorage.getItem('chatSessionId') || Math.random().toString(36).substring(2, 15);
+localStorage.setItem('chatSessionId', sessionId);
+
+// The main API URL. We'll try the direct URL first, then fall back if needed
+const API_URLS = [
+    'https://www.liftingchat.com', // Primary API URL
+    '/api',                        // Netlify proxy fallback
+    'https://liftingchat.com'      // Non-www URL fallback
+];
 
 // DOM elements
 const messagesContainer = document.getElementById('messages');
@@ -7,12 +16,9 @@ const messageInput = document.getElementById('message-input');
 const sendButton = document.getElementById('send-button');
 const sourcesContainer = document.getElementById('sources');
 
-// Generate a unique session ID or retrieve from localStorage
-const sessionId = localStorage.getItem('chatSessionId') || Math.random().toString(36).substring(2, 15);
-localStorage.setItem('chatSessionId', sessionId);
-
-// Track if we have an active request
-let isRequestActive = false;
+// Global variables
+let currentApiUrlIndex = 0;
+let eventSource = null;
 
 // Add event listener to send button
 sendButton.addEventListener('click', sendMessage);
@@ -24,178 +30,249 @@ messageInput.addEventListener('keypress', function(e) {
     }
 });
 
-// Function to send a message and get a response
+// Function to send a message
 async function sendMessage() {
-    // Prevent multiple requests
-    if (isRequestActive) {
-        console.log('Request already in progress');
-        return;
-    }
-
-    const message = messageInput.value.trim();
+    const messageText = messageInput.value.trim();
     
-    if (!message) return; // Don't send empty messages
+    if (!messageText) return; // Don't send empty messages
     
     // Add user message to chat
-    addMessage(message, 'user');
+    addMessage(messageText, 'user');
     
     // Clear input field
     messageInput.value = '';
     
-    // Create bot message container with loading indicator
-    const botMessageDiv = document.createElement('div');
-    botMessageDiv.className = 'message bot-message';
+    // Add loading indicator
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'message bot-message';
+    loadingDiv.innerHTML = '<p>Thinking...</p>';
+    messagesContainer.appendChild(loadingDiv);
     
-    const botMessageText = document.createElement('p');
-    botMessageText.innerHTML = 'Thinking<span class="thinking"></span>';
-    botMessageDiv.appendChild(botMessageText);
+    // First try streaming, with fallback to regular endpoint
+    let useStreaming = true;
+    let apiUrl = API_URLS[currentApiUrlIndex];
+    let attempts = 0;
     
-    messagesContainer.appendChild(botMessageDiv);
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    
-    // Mark that we have an active request
-    isRequestActive = true;
-    
-    // Try standard endpoint first (more reliable)
+    while (attempts < API_URLS.length * 2) { // Try each URL with both streaming and non-streaming
+        try {
+            if (useStreaming) {
+                // Close any existing event source
+                if (eventSource) {
+                    eventSource.close();
+                }
+                
+                const success = await tryStreamingResponse(apiUrl, messageText, loadingDiv);
+                if (success) return; // If streaming worked, we're done
+                
+                // If streaming failed, try regular endpoint with same URL
+                useStreaming = false;
+            } else {
+                const success = await tryRegularResponse(apiUrl, messageText, loadingDiv);
+                if (success) return; // If regular endpoint worked, we're done
+                
+                // If regular endpoint failed, try next URL with streaming
+                currentApiUrlIndex = (currentApiUrlIndex + 1) % API_URLS.length;
+                apiUrl = API_URLS[currentApiUrlIndex];
+                useStreaming = true;
+            }
+            
+            attempts++;
+        } catch (error) {
+            console.error('Error with API attempt:', error);
+            attempts++;
+            
+            // If we've tried everything, show an error
+            if (attempts >= API_URLS.length * 2) {
+                // Remove loading indicator if still present
+                if (messagesContainer.contains(loadingDiv)) {
+                    messagesContainer.removeChild(loadingDiv);
+                }
+                
+                // Show error message
+                addMessage('Sorry, I\'m having trouble connecting to the server. Please check your connection and try again.', 'bot');
+            }
+        }
+    }
+}
+
+// Function to try streaming response
+async function tryStreamingResponse(apiUrl, messageText, loadingDiv) {
+    return new Promise((resolve) => {
+        try {
+            // Create URL for EventSource
+            const params = new URLSearchParams({
+                query: messageText,
+                session_id: sessionId
+            });
+            
+            const streamUrl = `${apiUrl}/chat/stream?${params.toString()}`;
+            
+            console.log("Trying streaming from:", streamUrl);
+            
+            // Set up event source with a timeout
+            const abortController = new AbortController();
+            const timeoutId = setTimeout(() => abortController.abort(), 10000); // 10 second timeout
+            
+            eventSource = new EventSource(streamUrl);
+            let responseStarted = false;
+            let fullResponse = '';
+            
+            // When connection opens
+            eventSource.onopen = () => {
+                console.log("Stream connection opened");
+                clearTimeout(timeoutId);
+            };
+            
+            // When we receive data
+            eventSource.onmessage = (event) => {
+                try {
+                    responseStarted = true;
+                    const data = JSON.parse(event.data);
+                    
+                    if (!data.content) return;
+                    
+                    // If this is first chunk, replace the loading indicator
+                    if (fullResponse === '') {
+                        // Remove the loading indicator
+                        if (messagesContainer.contains(loadingDiv)) {
+                            messagesContainer.removeChild(loadingDiv);
+                        }
+                        
+                        // Create new message element
+                        const messageDiv = document.createElement('div');
+                        messageDiv.className = 'message bot-message';
+                        messageDiv.innerHTML = '<p></p>';
+                        messagesContainer.appendChild(messageDiv);
+                    }
+                    
+                    // Append to the response
+                    fullResponse += data.content;
+                    
+                    // Update the message content
+                    const lastMessage = messagesContainer.querySelector('.bot-message:last-child p');
+                    if (lastMessage) {
+                        lastMessage.textContent = fullResponse;
+                    }
+                    
+                    // Scroll to bottom
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                } catch (err) {
+                    console.error("Error processing stream chunk:", err);
+                }
+            };
+            
+            // For different event types
+            eventSource.addEventListener('error', (event) => {
+                console.error("Stream error:", event);
+                eventSource.close();
+                
+                // Only resolve as failure if we never got any response
+                if (!responseStarted) {
+                    clearTimeout(timeoutId);
+                    resolve(false);
+                }
+            });
+            
+            eventSource.addEventListener('done', () => {
+                console.log("Stream completed");
+                eventSource.close();
+                
+                // Parse sources from the response if applicable
+                if (fullResponse.includes("Sources:")) {
+                    const parts = fullResponse.split("Sources:");
+                    if (parts.length > 1) {
+                        try {
+                            // Extract sources using regex
+                            const sourceText = parts[1].trim();
+                            const sourceRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+                            let match;
+                            const sources = [];
+                            
+                            while ((match = sourceRegex.exec(sourceText)) !== null) {
+                                sources.push({
+                                    title: match[1],
+                                    url: match[2]
+                                });
+                            }
+                            
+                            if (sources.length > 0) {
+                                displaySources(sources);
+                            }
+                        } catch (err) {
+                            console.error("Error parsing sources:", err);
+                        }
+                    }
+                }
+                
+                clearTimeout(timeoutId);
+                resolve(true);
+            });
+            
+            // If connection fails entirely
+            eventSource.onerror = () => {
+                console.error("Stream connection failed");
+                eventSource.close();
+                clearTimeout(timeoutId);
+                
+                // Only mark as failure if we never got any data
+                resolve(responseStarted);
+            };
+        } catch (error) {
+            console.error("Error setting up streaming:", error);
+            if (eventSource) eventSource.close();
+            resolve(false);
+        }
+    });
+}
+
+// Function to try regular response
+async function tryRegularResponse(apiUrl, messageText, loadingDiv) {
     try {
-        console.log('Using standard endpoint...');
-        const response = await fetch(`${API_URL}/chat`, {
+        console.log("Trying regular API at:", `${apiUrl}/chat`);
+        
+        // Use AbortController for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+        
+        // Send message to API
+        const response = await fetch(`${apiUrl}/chat`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                query: message,
+                query: messageText,
                 session_id: sessionId
-            })
+            }),
+            signal: controller.signal
         });
         
-        if (response.ok) {
-            const data = await response.json();
-            
-            // Update message with response
-            botMessageText.textContent = data.response || "Sorry, I couldn't generate a response.";
-            
-            // Display sources if available
-            if (data.sources && data.sources.length > 0) {
-                displaySources(data.sources);
-            }
-        } else {
-            // If standard endpoint fails, try streaming
-            console.log('Standard endpoint failed, trying streaming...');
-            
-            // Update UI to show we're switching to streaming
-            botMessageText.textContent = 'Loading response...';
-            
-            let fullResponse = '';
-            let eventSource = null;
-            
-            try {
-                // Create URL with query parameters instead of using POST body
-                const url = new URL(`${API_URL}/chat/stream`);
-                
-                // Use fetch with streaming
-                const streamResponse = await fetch(url, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        query: message,
-                        session_id: sessionId
-                    })
-                });
-                
-                if (!streamResponse.ok) {
-                    throw new Error(`HTTP error! status: ${streamResponse.status}`);
-                }
-                
-                // Process the response as a stream
-                const reader = streamResponse.body.getReader();
-                const decoder = new TextDecoder();
-                
-                // Clear the loading text
-                botMessageText.textContent = '';
-                
-                // Track accumulated chunks for processing
-                let streamBuffer = '';
-                
-                while (true) {
-                    const { done, value } = await reader.read();
-                    
-                    if (done) {
-                        console.log('Stream complete');
-                        break;
-                    }
-                    
-                    // Decode this chunk
-                    const chunk = decoder.decode(value, { stream: true });
-                    streamBuffer += chunk;
-                    
-                    // Process all complete SSE messages (they're separated by double newlines)
-                    const messages = streamBuffer.split('\n\n');
-                    // Keep any incomplete message for next iteration
-                    streamBuffer = messages.pop() || '';
-                    
-                    for (const message of messages) {
-                        if (message.trim() === '' || message.startsWith('retry:')) continue;
-                        
-                        if (message.startsWith('data: ')) {
-                            try {
-                                const data = JSON.parse(message.substring(6));
-                                if (data.content) {
-                                    fullResponse += data.content;
-                                    botMessageText.textContent = fullResponse;
-                                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-                                }
-                            } catch (e) {
-                                console.error('Error parsing SSE message:', e, message);
-                            }
-                        }
-                    }
-                }
-                
-                // Check if we got a response
-                if (!fullResponse) {
-                    throw new Error('No content received from streaming endpoint');
-                }
-                
-                // Extract sources if present in the response
-                const sourceMatch = fullResponse.match(/Sources:\s*([\s\S]*)/);
-                if (sourceMatch && sourceMatch[1]) {
-                    const sourcesText = sourceMatch[1].trim();
-                    
-                    // Parse links from markdown format [title](url)
-                    const linkPattern = /\[(.*?)\]\((.*?)\)/g;
-                    const sources = [];
-                    let match;
-                    
-                    while ((match = linkPattern.exec(sourcesText)) !== null) {
-                        sources.push({
-                            title: match[1],
-                            url: match[2]
-                        });
-                    }
-                    
-                    if (sources.length > 0) {
-                        displaySources(sources);
-                        
-                        // Remove sources section from displayed response
-                        botMessageText.textContent = fullResponse.replace(/Sources:[\s\S]*$/, '').trim();
-                    }
-                }
-                
-            } catch (streamError) {
-                console.error('Error with streaming:', streamError);
-                botMessageText.textContent = 'I encountered an error processing your request. Please try again.';
-            }
+        clearTimeout(timeoutId);
+        
+        // Remove loading indicator
+        if (messagesContainer.contains(loadingDiv)) {
+            messagesContainer.removeChild(loadingDiv);
         }
+        
+        if (!response.ok) {
+            console.error("API returned error:", response.status, response.statusText);
+            return false;
+        }
+        
+        const data = await response.json();
+        
+        // Add bot response to chat
+        addMessage(data.response, 'bot');
+        
+        // Display sources if available
+        if (data.sources && data.sources.length > 0) {
+            displaySources(data.sources);
+        }
+        
+        return true;
     } catch (error) {
-        console.error('Error:', error);
-        botMessageText.textContent = 'I encountered an error processing your request. Please try again.';
-    } finally {
-        // Request is no longer active
-        isRequestActive = false;
+        console.error("Error with regular API call:", error);
+        return false;
     }
 }
 
@@ -219,24 +296,16 @@ function displaySources(sources) {
     // Clear current sources
     sourcesContainer.innerHTML = '';
     
-    if (!sources || sources.length === 0) {
-        return;
-    }
-    
     sources.forEach(source => {
         const sourceDiv = document.createElement('div');
         sourceDiv.className = 'source';
         
-        if (source.url && source.title) {
-            const sourceLink = document.createElement('a');
-            sourceLink.href = source.url;
-            sourceLink.target = '_blank';
-            sourceLink.textContent = source.title;
-            sourceDiv.appendChild(sourceLink);
-        } else {
-            sourceDiv.textContent = source.title || "Unknown source";
-        }
+        const sourceLink = document.createElement('a');
+        sourceLink.href = source.url;
+        sourceLink.target = '_blank';
+        sourceLink.textContent = source.title;
         
+        sourceDiv.appendChild(sourceLink);
         sourcesContainer.appendChild(sourceDiv);
     });
 }
