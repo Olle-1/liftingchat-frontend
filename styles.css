@@ -108,8 +108,9 @@ nav a {
     display: grid;
     grid-template-columns: 1fr;
     gap: 1rem;
-    height: calc(100vh - 150px);
+    height: calc(100vh - 280px); /* Increased to make room for sample questions */
     padding: 1rem 0;
+    min-height: 500px; /* Ensure minimum height */
 }
 
 .messages {

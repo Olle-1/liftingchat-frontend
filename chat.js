@@ -57,11 +57,11 @@ function startTimer(loadingDiv) {
         loadingDiv.appendChild(timerElement);
     }
     
-    // Update timer every 100ms
+    // Update timer every second with whole numbers only
     timerInterval = setInterval(() => {
-        const elapsedTime = (Date.now() - startTime) / 1000;
-        timerElement.textContent = `Time elapsed: ${elapsedTime.toFixed(1)}s`;
-    }, 100);
+        const elapsedTime = Math.floor((Date.now() - startTime) / 1000);
+        timerElement.textContent = `Time elapsed: ${elapsedTime}s`;
+    }, 1000);
 }
 
 // Function to stop the timer
