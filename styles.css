@@ -119,6 +119,8 @@ nav a {
     height: 70vh;
     overflow-y: auto;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
 }
 
 .message {
@@ -126,6 +128,10 @@ nav a {
     padding: 0.75rem;
     border-radius: 8px;
     max-width: 80%;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: pre-wrap;
+    position: relative;
 }
 
 .user-message {
@@ -138,9 +144,95 @@ nav a {
     background-color: #f1f1f1;
 }
 
+/* Markdown styling for bot messages */
+.bot-message h1, .bot-message h2, .bot-message h3, .bot-message h4 {
+    margin-top: 0.75rem;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+.bot-message h1 {
+    font-size: 1.5rem;
+}
+
+.bot-message h2 {
+    font-size: 1.35rem;
+}
+
+.bot-message h3 {
+    font-size: 1.2rem;
+}
+
+.bot-message h4 {
+    font-size: 1.1rem;
+}
+
+.bot-message ul, .bot-message ol {
+    margin-left: 1.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.bot-message li {
+    margin-bottom: 0.25rem;
+}
+
+.bot-message p {
+    margin-bottom: 0.75rem;
+}
+
+.bot-message p:last-child {
+    margin-bottom: 0;
+}
+
+.bot-message code {
+    background-color: rgba(0, 0, 0, 0.05);
+    padding: 0.1rem 0.2rem;
+    border-radius: 3px;
+    font-family: monospace;
+    font-size: 0.9em;
+}
+
+.bot-message pre {
+    background-color: rgba(0, 0, 0, 0.05);
+    padding: 0.75rem;
+    border-radius: 4px;
+    overflow-x: auto;
+    margin-bottom: 0.75rem;
+}
+
+.bot-message pre code {
+    background-color: transparent;
+    padding: 0;
+}
+
+.bot-message table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-bottom: 1rem;
+}
+
+.bot-message th, .bot-message td {
+    border: 1px solid #ddd;
+    padding: 0.5rem;
+}
+
+.bot-message th {
+    background-color: rgba(0, 0, 0, 0.05);
+    font-weight: bold;
+}
+
+.bot-message blockquote {
+    border-left: 4px solid #ddd;
+    padding-left: 1rem;
+    margin-left: 0;
+    margin-right: 0;
+    font-style: italic;
+}
+
 .input-area {
     display: flex;
     gap: 0.5rem;
+    margin-top: 1rem;
 }
 
 .input-area input {
@@ -148,6 +240,7 @@ nav a {
     padding: 0.75rem;
     border: 1px solid #ddd;
     border-radius: 4px;
+    font-size: 1rem;
 }
 
 .input-area button {
@@ -157,6 +250,53 @@ nav a {
     border: none;
     border-radius: 4px;
     cursor: pointer;
+    font-weight: 500;
+}
+
+/* Sample questions styles */
+.sample-questions {
+    margin-top: 1rem;
+    background: white;
+    padding: 1rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.sample-questions h4 {
+    color: var(--dark);
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+}
+
+.sample-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.sample-question {
+    padding: 0.75rem;
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: left;
+    font-size: 0.95rem;
+}
+
+.sample-question:hover {
+    background: #e5e5e5;
+    border-color: #ccc;
+}
+
+/* Thinking timer style */
+.thinking-timer {
+    color: #666;
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+    display: block;
+    font-style: italic;
 }
 
 /* Form styles */
@@ -222,6 +362,18 @@ nav a {
     border-bottom: 1px solid #eee;
 }
 
+.source a {
+    color: var(--primary);
+    display: block;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.source a:hover {
+    text-decoration: underline;
+}
+
 /* Footer */
 footer {
     background: var(--dark);
@@ -237,169 +389,6 @@ footer {
         grid-template-columns: 3fr 1fr;
     }
 }
-/* Animated dots */
-@keyframes pulse {
-    0% { opacity: 0.4; }
-    50% { opacity: 1; }
-    100% { opacity: 0.4; }
-  }
-  
-  .dots {
-    animation: pulse 1.5s infinite;
-    display: inline-block;
-  }
-  
-  /* Loading text styling */
-  #loading-text {
-    display: flex;
-    align-items: center;
-    font-style: italic;
-  }
-  
-  /* Message transition effects */
-  .message {
-    transition: opacity 0.3s ease;
-  }
-  
-  /* Error message styling */
-  .bot-message:has(p:contains("error")), 
-  .bot-message:has(p:contains("Error")) {
-    background-color: rgba(255, 0, 0, 0.1);
-    border-left: 3px solid #f44336;
-  }
-  
-  /* Success message styling */
-  .bot-message:not(:has(p:contains("error"))):not(:has(p:contains("Error"))) {
-    border-left: 3px solid var(--primary);
-  }
-
-.dots {
-  animation: pulse 1.5s infinite;
-  display: inline-block;
-}
-
-/* Loading text styling */
-#loading-text {
-  display: flex;
-  align-items: center;
-  font-style: italic;
-}
-
-/* Message transition effects */
-.message {
-  transition: opacity 0.3s ease;
-}
-
-/* Error message styling */
-.bot-message:has(p:contains("error")), 
-.bot-message:has(p:contains("Error")) {
-  background-color: rgba(255, 0, 0, 0.1);
-  border-left: 3px solid #f44336;
-}
-
-/* Success message styling */
-.bot-message:not(:has(p:contains("error"))):not(:has(p:contains("Error"))) {
-  border-left: 3px solid var(--primary);
-}
-
-/* Fix for message bubbles */
-.message {
-    margin-bottom: 1rem;
-    padding: 0.75rem;
-    border-radius: 8px;
-    max-width: 80%;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-    white-space: pre-wrap;
-}
-
-.message p {
-    margin: 0;
-    line-height: 1.5;
-}
-
-.user-message {
-    background-color: var(--primary);
-    color: white;
-    margin-left: auto;
-}
-
-.bot-message {
-    background-color: #f1f1f1;
-}
-
-/* Add loading animation */
-@keyframes thinkingDots {
-    0%, 20% {
-        content: ".";
-    }
-    40% {
-        content: "..";
-    }
-    60%, 100% {
-        content: "...";
-    }
-}
-
-.thinking:after {
-    content: "...";
-    animation: thinkingDots 1.5s infinite;
-}
-
-/* Container fixes */
-.messages {
-    background: white;
-    border-radius: 8px;
-    padding: 1rem;
-    height: 70vh;
-    overflow-y: auto;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    display: flex;
-    flex-direction: column;
-}
-
-/* Improve input area */
-.input-area {
-    display: flex;
-    gap: 0.5rem;
-    margin-top: 1rem;
-    position: relative;
-}
-
-.input-area input {
-    flex: 1;
-    padding: 0.75rem;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-size: 1rem;
-}
-
-.input-area button {
-    padding: 0.75rem 1rem;
-    background: var(--primary);
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: 500;
-}
-
-/* Fix for message bubbles */
-.message {
-    margin-bottom: 1rem;
-    padding: 0.75rem;
-    border-radius: 8px;
-    max-width: 80%;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-    white-space: pre-wrap;
-    position: relative;
-}
-
-.message p {
-    margin: 0;
-    line-height: 1.5;
-}
 
 /* Loading animation */
 @keyframes thinkingDots {
@@ -412,90 +401,6 @@ footer {
 .thinking:after {
     content: "";
     animation: thinkingDots 1.5s infinite;
-}
-
-/* Improve message display */
-.message {
-    margin-bottom: 1rem;
-    padding: 0.75rem;
-    border-radius: 8px;
-    max-width: 80%;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-    white-space: pre-wrap;
-    position: relative;
-}
-
-.message p {
-    margin: 0;
-    line-height: 1.5;
-}
-
-/* Add better error message styling */
-.error-message {
-    background-color: #ffeeee;
-    border-left: 4px solid #ff6b6b;
-    padding: 10px;
-    margin: 10px 0;
-    color: #d32f2f;
-}
-
-/* Add these styles to your existing styles.css file */
-
-/* Message formatting improvements */
-.message {
-    margin-bottom: 1rem;
-    padding: 0.75rem;
-    border-radius: 8px;
-    max-width: 80%;
-    word-wrap: break-word;  /* Ensure long text wraps properly */
-    overflow-wrap: break-word;
-}
-
-.message p {
-    margin: 0;
-    white-space: pre-wrap; /* Preserve whitespace and wrap */
-}
-
-.user-message {
-    background-color: var(--primary);
-    color: white;
-    margin-left: auto;
-}
-
-.bot-message {
-    background-color: #f1f1f1;
-}
-
-/* Loading animation */
-@keyframes pulse {
-    0% { opacity: 0.5; }
-    50% { opacity: 1; }
-    100% { opacity: 0.5; }
-}
-
-.loading-indicator {
-    display: inline-block;
-    animation: pulse 1.5s infinite ease-in-out;
-}
-
-/* Source link styling */
-.source {
-    margin-bottom: 0.75rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 1px solid #eee;
-}
-
-.source a {
-    color: var(--primary);
-    display: block;
-    text-overflow: ellipsis;
-    overflow: hidden;
-    white-space: nowrap;
-}
-
-.source a:hover {
-    text-decoration: underline;
 }
 
 /* Disable button when sending */

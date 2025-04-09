@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat - LiftingChat</title>
     <link rel="stylesheet" href="styles.css">
+    <!-- Add Marked.js for Markdown support -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
     <header>
@@ -29,6 +31,16 @@
                 <div class="input-area">
                     <input type="text" id="message-input" placeholder="Type your message...">
                     <button id="send-button">Send</button>
+                </div>
+                
+                <!-- Sample questions section -->
+                <div class="sample-questions">
+                    <h4>Try asking:</h4>
+                    <div class="sample-buttons">
+                        <button class="sample-question">Biceps exercises for the long head</button>
+                        <button class="sample-question">Best rep range for muscle growth</button>
+                        <button class="sample-question">How to break through a plateau</button>
+                    </div>
                 </div>
             </div>
             

@@ -20,6 +20,8 @@ const sourcesContainer = document.getElementById('sources');
 let currentApiUrlIndex = 0;
 let eventSource = null;
 let isSubmitting = false;
+let timerInterval = null;
+let startTime = 0;
 
 // Add event listener to send button
 sendButton.addEventListener('click', sendMessage);
@@ -30,6 +32,45 @@ messageInput.addEventListener('keypress', function(e) {
         sendMessage();
     }
 });
+
+// Initialize sample questions if they exist
+const sampleQuestions = document.querySelectorAll('.sample-question');
+if (sampleQuestions.length > 0) {
+    sampleQuestions.forEach(button => {
+        button.addEventListener('click', function() {
+            const questionText = this.textContent;
+            messageInput.value = questionText;
+            sendMessage();
+        });
+    });
+}
+
+// Function to start the timer
+function startTimer(loadingDiv) {
+    startTime = Date.now();
+    
+    // Create timer element if it doesn't exist
+    let timerElement = loadingDiv.querySelector('.thinking-timer');
+    if (!timerElement) {
+        timerElement = document.createElement('div');
+        timerElement.className = 'thinking-timer';
+        loadingDiv.appendChild(timerElement);
+    }
+    
+    // Update timer every 100ms
+    timerInterval = setInterval(() => {
+        const elapsedTime = (Date.now() - startTime) / 1000;
+        timerElement.textContent = `Time elapsed: ${elapsedTime.toFixed(1)}s`;
+    }, 100);
+}
+
+// Function to stop the timer
+function stopTimer() {
+    if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+    }
+}
 
 // Function to send a message
 async function sendMessage() {
@@ -54,6 +95,9 @@ async function sendMessage() {
     loadingDiv.className = 'message bot-message';
     loadingDiv.innerHTML = '<p><span class="thinking">Thinking</span></p>';
     messagesContainer.appendChild(loadingDiv);
+    
+    // Start the timer
+    startTimer(loadingDiv);
     
     // First try streaming, with fallback to regular endpoint
     let useStreaming = true;
@@ -104,6 +148,9 @@ async function sendMessage() {
             
             // If we've tried everything, show an error
             if (attempts >= API_URLS.length * 2) {
+                // Stop the timer
+                stopTimer();
+                
                 // Remove loading indicator if still present
                 if (messagesContainer.contains(loadingDiv)) {
                     messagesContainer.removeChild(loadingDiv);
@@ -151,6 +198,9 @@ async function tryStreamingResponse(urlWithParams, messageText, loadingDiv) {
                     
                     // If this is first chunk, replace the loading indicator
                     if (fullResponse === '') {
+                        // Stop the timer
+                        stopTimer();
+                        
                         // Remove the loading indicator
                         if (messagesContainer.contains(loadingDiv)) {
                             messagesContainer.removeChild(loadingDiv);
@@ -159,17 +209,18 @@ async function tryStreamingResponse(urlWithParams, messageText, loadingDiv) {
                         // Create new message element
                         const messageDiv = document.createElement('div');
                         messageDiv.className = 'message bot-message';
-                        messageDiv.innerHTML = '<p></p>';
+                        messageDiv.id = 'current-streaming-message';
                         messagesContainer.appendChild(messageDiv);
                     }
                     
                     // Append to the response
                     fullResponse += data.content;
                     
-                    // Update the message content
-                    const lastMessage = messagesContainer.querySelector('.bot-message:last-child p');
-                    if (lastMessage) {
-                        lastMessage.textContent = fullResponse;
+                    // Update the message content with markdown rendering
+                    const messageDiv = document.getElementById('current-streaming-message');
+                    if (messageDiv) {
+                        // Use marked to render markdown
+                        messageDiv.innerHTML = marked.parse(fullResponse);
                     }
                     
                     // Scroll to bottom
@@ -198,6 +249,12 @@ async function tryStreamingResponse(urlWithParams, messageText, loadingDiv) {
                 console.log("Stream completed");
                 clearTimeout(connectionTimeout);
                 eventSource.close();
+                
+                // Remove the id from the message now that streaming is complete
+                const messageDiv = document.getElementById('current-streaming-message');
+                if (messageDiv) {
+                    messageDiv.removeAttribute('id');
+                }
                 
                 // Parse sources from the response if applicable
                 if (fullResponse.includes("Sources:")) {
@@ -275,6 +332,9 @@ async function tryRegularResponse(apiUrl, messageText, loadingDiv) {
         
         clearTimeout(timeoutId);
         
+        // Stop the timer
+        stopTimer();
+        
         // Remove loading indicator
         if (messagesContainer.contains(loadingDiv)) {
             messagesContainer.removeChild(loadingDiv);
@@ -297,7 +357,7 @@ async function tryRegularResponse(apiUrl, messageText, loadingDiv) {
         
         const data = await response.json();
         
-        // Add bot response to chat
+        // Add bot response to chat with markdown rendering
         addMessage(data.response, 'bot');
         
         // Display sources if available
@@ -308,6 +368,9 @@ async function tryRegularResponse(apiUrl, messageText, loadingDiv) {
         return true;
     } catch (error) {
         console.error("Error with regular API call:", error);
+        
+        // Stop the timer
+        stopTimer();
         
         // If the loadingDiv is still there, replace it with an error message
         if (messagesContainer.contains(loadingDiv)) {
@@ -331,9 +394,17 @@ function addMessage(text, sender) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${sender}-message`;
     
-    const messagePara = document.createElement('p');
-    messagePara.textContent = text;
-    messageDiv.appendChild(messagePara);
+    // For user messages, just use text content
+    if (sender === 'user') {
+        const messagePara = document.createElement('p');
+        messagePara.textContent = text;
+        messageDiv.appendChild(messagePara);
+    } 
+    // For bot messages, use markdown parsing
+    else {
+        // Use the marked library to render markdown
+        messageDiv.innerHTML = marked.parse(text);
+    }
     
     messagesContainer.appendChild(messageDiv);
     
